@@ -1,0 +1,25 @@
+{
+  "name": "pinf.io-for-ubuntu",
+  "main": "os-adapter.js",
+  "dependencies": {
+    "bash.origin": "0.1.x",
+    "q": "^1.4.1"
+  },
+  "expectedDependencies": {
+    "org.pinf.genesis.lib": "0.1.x"
+  },
+  "config": {
+    "org.pinf.genesis.lib/0": {
+      "api": {
+        "consumes": {
+          "ASSERT": "assert",
+          "PATH": "path",
+          "Q": "q"
+        },
+        "provides": {
+          "manifested-os": "./api/manifested-os.js"
+        }
+      }
+    }
+  }
+}

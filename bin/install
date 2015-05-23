@@ -1,0 +1,175 @@
+#!/bin/bash
+# Source https://github.com/cadorn/bash.origin
+. "$BO_ROOT_SCRIPT_PATH"
+function init {
+	eval BO_SELF_BASH_SOURCE="$BO_READ_SELF_BASH_SOURCE"
+	BO_deriveSelfDir ___TMP___ "$BO_SELF_BASH_SOURCE"
+	PGS_DIR="$___TMP___"
+
+
+	if [ -z "$PIO_SERVICE_HOME" ]; then
+		echo "ERROR: 'PIO_SERVICE_HOME' environment variable not set!"
+		exit 1
+	fi
+
+
+	MON_VERSION="1.2.3"
+
+
+	function ensureSwap {
+		BO_format "$VERBOSE" "HEADER" "Ensuring swap space is enabled"
+		if [ $(swapon -s | grep -ci "/swapfile" ) -gt 0 ]; then
+			echo "Swap file already configured"
+		else
+			# @see https://www.digitalocean.com/community/tutorials/how-to-add-swap-on-ubuntu-12-04
+			echo "Configuring swap file"
+			sudo dd if=/dev/zero of=/swapfile bs=1024 count=4096k
+			sudo mkswap /swapfile
+			sudo swapon /swapfile
+			echo "/swapfile       none    swap    sw      0       0" | sudo tee -a /etc/fstab
+			echo 10 | sudo tee /proc/sys/vm/swappiness
+			echo vm.swappiness = 10 | sudo tee -a /etc/sysctl.conf
+			sudo chown root:root /swapfile
+			sudo chmod 0600 /swapfile
+		fi
+		BO_format "$VERBOSE" "FOOTER"
+	}
+
+	function updateAPTandInstallCommonPackages {
+		if [ -e "$PIO_SERVICE_HOME/.ran.updateAPTandInstallCommonPackages" ]; then
+			return 0;
+		fi
+		sudo apt-get -y update
+		sudo apt-get -y install make g++ git-core realpath
+		touch "$PIO_SERVICE_HOME/.ran.updateAPTandInstallCommonPackages"
+	}
+
+	function ensureMon {
+		BO_format "$VERBOSE" "HEADER" "Ensuring mon is installed"
+		if BO_has "mon"; then
+			return 0
+		fi
+		local PACKAGE_BASE_PATH="$PIO_SERVICE_HOME/packages"
+		if [ ! -e "$PACKAGE_BASE_PATH" ]; then
+			mkdir -p "$PACKAGE_BASE_PATH"
+		fi
+		pushd "$PACKAGE_BASE_PATH" > /dev/null
+			if [ ! -e "mon-$MON_VERSION" ]; then
+				BO_log "$VERBOSE" "Installing mon ($MON_VERSION)"
+				local TMP_DIR="mon-$MON_VERSION-$(date +%s%N)"
+				mkdir "$TMP_DIR"
+				pushd "$TMP_DIR" > /dev/null
+					curl -L# https://github.com/visionmedia/mon/archive/$MON_VERSION.tar.gz | tar zx --strip 1
+					make
+					# TODO: Make sure we fail if these calls fail.
+					BO_log "$VERBOSE" "mon version: "$(./mon --version)
+				popd > /dev/null
+				mv "$TMP_DIR" "mon-$MON_VERSION"
+				if [ ! -e "$PIO_BIN_DIRPATH/mon" ]; then
+					rm -Rf "$PIO_BIN_DIRPATH/mon" > /dev/null || true
+					BO_log "$VERBOSE" "Linking '$PACKAGE_BASE_PATH/mon-$MON_VERSION/mon' to '$PIO_BIN_DIRPATH/mon'"
+					ln -s "$PACKAGE_BASE_PATH/mon-$MON_VERSION/mon" "$PIO_BIN_DIRPATH/mon"
+				fi
+			fi
+		popd > /dev/null
+		BO_format "$VERBOSE" "FOOTER"
+	}
+
+	ensureSwap
+	updateAPTandInstallCommonPackages
+	ensureMon
+
+return 0
+
+
+	NODE_VERSION="v0.10.32"
+
+launchScript='
+#!/bin/bash -e
+. '$PIO_BIN_PATH'/activate.sh
+export PATH='$PATH'
+export PORT='$PORT'
+'$PIO_SERVICE_PATH'/packages/node/bin/node '$PIO_SERVICE_PATH'/live/install/server.js >> '$PIO_SERVICE_LOG_BASE_PATH'.log 2>&1 
+'
+echo "$launchScript" | sudo tee $PIO_SCRIPTS_PATH/_launch.sh
+sudo chmod ug+x $PIO_SCRIPTS_PATH/_launch.sh
+
+
+
+initScript=''
+if [ -f "/etc/init/app-$PIO_SERVICE_ID_SAFE.conf" ]; then
+    sudo stop app-$PIO_SERVICE_ID_SAFE || true
+fi
+echo "$initScript" | sudo tee /etc/init/app-$PIO_SERVICE_ID_SAFE.conf
+sudo start app-$PIO_SERVICE_ID_SAFE
+
+	function ensureNodeJS {
+		BO_format "$VERBOSE" "HEADER" "Ensuring NodeJS is installed"
+		if BO_has "node"; then
+			return 0
+		fi
+		local PACKAGE_BASE_PATH="$PIO_SERVICE_HOME/packages"
+		if [ ! -e "$PACKAGE_BASE_PATH" ]; then
+			mkdir -p "$PACKAGE_BASE_PATH"
+		fi
+		pushd "$PACKAGE_BASE_PATH" > /dev/null
+			if [ ! -e "node-$NODE_VERSION" ]; then
+				BO_log "$VERBOSE" "Installing NodeJS ($NODE_VERSION) and npm"
+				local uname="$(uname -a)"
+				local os=
+				local arch="$(uname -m)"
+				case "$uname" in
+					Linux\ *) os=linux ;;
+					Darwin\ *) os=darwin ;;
+					SunOS\ *) os=sunos ;;
+					FreeBSD\ *) os=freebsd ;;
+					esac
+				case "$uname" in
+					*x86_64*) arch=x64 ;;
+					*i*86*) arch=x86 ;;
+					*armv6l*) arch=arm-pi ;;
+					esac  
+				if [ $os != "linux" ] && [ $os != "darwin" ]; then
+					echo "ERROR: Unsupported Platform: $os $arch" 1>&2
+					exit 1
+				fi
+				if [ $arch != "x64" ] && [ $arch != "x86" ]; then
+					echo "ERROR: Unsupported Architecture: $os $arch" 1>&2
+					exit 1
+				fi
+				if hash curl 2>/dev/null; then
+					FETCH="curl -sSOL"
+				elif hash wget 2>/dev/null; then
+					FETCH="wget -nc"
+				else
+					echo "ERROR: No 'curl' nor 'wget' command found!" >&2
+					exit 1
+				fi
+
+				if [ ! -e "node-$NODE_VERSION-$os-$arch.tar.gz" ]; then
+					$FETCH http://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-$os-$arch.tar.gz
+				fi
+				tar xfz node-$NODE_VERSION-$os-$arch.tar.gz
+				# TODO: Make sure we fail if these calls fail.
+				BO_log "$VERBOSE" "Node version: "$(node-$NODE_VERSION-$os-$arch/bin/node --version)
+				BO_log "$VERBOSE" "NPM version: "$(node-$NODE_VERSION-$os-$arch/bin/npm --version)
+				mv node-$NODE_VERSION-$os-$arch node-$NODE_VERSION
+
+				if [ ! -e "$PIO_BIN_DIRPATH/node" ]; then
+					rm -Rf "$PIO_BIN_DIRPATH/node" > /dev/null || true
+					BO_log "$VERBOSE" "Linking '$PACKAGE_BASE_PATH/node-$NODE_VERSION/bin/node' to '$PIO_BIN_DIRPATH/node'"
+					ln -s "$PACKAGE_BASE_PATH/node-$NODE_VERSION/bin/node" "$PIO_BIN_DIRPATH/node"
+				fi
+				if [ ! -e "$PIO_BIN_DIRPATH/npm" ]; then
+					rm -Rf "$PIO_BIN_DIRPATH/npm" > /dev/null || true
+					BO_log "$VERBOSE" "Linking '$PACKAGE_BASE_PATH/node-$NODE_VERSION/bin/npm' to '$PIO_BIN_DIRPATH/npm'"
+					ln -s "$PACKAGE_BASE_PATH/node-$NODE_VERSION/bin/npm" "$PIO_BIN_DIRPATH/npm"
+				fi
+			fi
+		popd > /dev/null
+		BO_format "$VERBOSE" "FOOTER"
+	}
+
+
+}
+init $@
