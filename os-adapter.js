@@ -3,6 +3,7 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 
 	exports.resolveSystemENV = function (env) {
 
+        env.HOME = env.HOME || "/root";
         env.PIO_HOME = env.PIO_HOME || "$HOME/io.pinf";
     	env.PIO_BIN_DIRPATH = env.PIO_BIN_DIRPATH || (env.PIO_HOME + "/bin");
         env.PATH = env.PATH || (env.PIO_BIN_DIRPATH + ':$PATH');
@@ -42,8 +43,15 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
 
             // pinf.io activation file
             'if [ ! -f "' + options.env.PIO_BIN_DIRPATH + '/activate" ]; then',
-            '  echo "#!/bin/sh -e\n' + Object.keys(env).map(function (name) {
-                return 'export ' + name + '=' + env[name];
+            '  echo "' + [
+                '#!/bin/sh -e',
+
+                // These are needed at minimum to boot the pinf.io environment.
+                'export HOME=' + options.env.HOME,
+                'export BO_ROOT_SCRIPT_PATH=' + options.env.BO_ROOT_SCRIPT_PATH
+
+            ].join("\n") + '\n' + Object.keys(options.env).map(function (name) {
+                return 'export ' + name + '=' + options.env[name];
             }).join("\n").replace(/"/g, "\\\"") + '" > ' + options.env.PIO_BIN_DIRPATH + '/activate',
             'fi'
         ];
@@ -135,8 +143,6 @@ require('org.pinf.genesis.lib/lib/api').forModule(require, module, function (API
         for (var i=1 ; i<=parts.length ; i++) {
             paths.push(API.PATH.join(__dirname, "runtimes", parts.slice(0, i).join("-")));
         }
-
-console.log("resolveServiceRuntimeTemplatePaths PATHS", paths);
 
         return API.Q.resolve(paths);
     }
