@@ -11,7 +11,7 @@ function init {
 
 
 
-	BO_format "$VERBOSE" "HEADER" "Running 'postdeploy.sh' for: $PIO_SERVICE_HOME"
+	BO_format "$VERBOSE" "HEADER" "Running 'postsync.sh' for: $PIO_SERVICE_HOME"
 
 	local SYNC_CHECKSUM=`sha256sum "$PIO_SERVICE_HOME/sync/.smg.form.json" | awk '{ print $1 }'`
 	BO_log "$VERBOSE" "Sync checksum: $SYNC_CHECKSUM"
@@ -63,10 +63,10 @@ function init {
 
 	# Let the NodeJS (or equivalent) implementation do the work if it is available
 	# instead of doing the minimal configuring below.
-	if hash io-pinf-pio-postdeploy 2>/dev/null; then
-		if [ "$PIO_SERVICE_ID" != "io.pinf.pio.postdeploy" ]; then
+	if hash io-pinf-pio-postsync 2>/dev/null; then
+		if [ "$PIO_SERVICE_ID" != "io.pinf.pio.postsync" ]; then
 			pushd "$PIO_SERVICE_HOME" > /dev/null
-				io-pinf-pio-postdeploy
+				io-pinf-pio-postsync
 			popd > /dev/null
 			return 0
 		fi
