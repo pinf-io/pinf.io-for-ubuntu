@@ -4,7 +4,7 @@
 function init {
 	eval BO_SELF_BASH_SOURCE="$BO_READ_SELF_BASH_SOURCE"
 	BO_deriveSelfDir ___TMP___ "$BO_SELF_BASH_SOURCE"
-	PGS_DIR="$___TMP___"
+	local __BO_DIR__="$___TMP___"
 
 
 	if [ -z "$PIO_SERVICE_HOME" ]; then
@@ -15,6 +15,25 @@ function init {
 
 	MON_VERSION="1.2.3"
 
+	function ensureBashOrigin {
+		BO_format "$VERBOSE" "HEADER" "Ensuring bash.origin"
+
+		"$__BO_DIR__/../node_modules/bash.origin/bash.origin" BO install
+
+		BO_ROOT_SCRIPT_PATH="$HOME/.bash.origin" \
+			"$__BO_DIR__/../node_modules/bash.origin/bash.origin" BO install
+
+		BO_format "$VERBOSE" "FOOTER"
+	}
+
+	function ensureNodeJS {
+		BO_format "$VERBOSE" "HEADER" "Ensuring node & npm"
+
+		BO_link_node "$(dirname $BO_ROOT_SCRIPT_PATH)"
+		BO_link_npm "$(dirname $BO_ROOT_SCRIPT_PATH)"
+
+		BO_format "$VERBOSE" "FOOTER"
+	}
 
 	function ensureSwap {
 		BO_format "$VERBOSE" "HEADER" "Ensuring swap space is enabled"
@@ -75,11 +94,14 @@ function init {
 		BO_format "$VERBOSE" "FOOTER"
 	}
 
+	ensureBashOrigin
+	ensureNodeJS
 	ensureSwap
 	updateAPTandInstallCommonPackages
 	ensureMon
 
 return 0
+
 
 	# Download NodeJS directly without nvm. Keeping for now.
 	function ensureNodeJS {

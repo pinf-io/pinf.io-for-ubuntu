@@ -9,14 +9,22 @@ function init {
 	. "$PIO_BIN_DIRPATH/activate"
 
 
-	if BO_has smi-for-npm; then
-		BO_log "$VERBOSE" "Installing with smi-for-npm in: $(pwd)"
-		smi-for-npm install --production --unsafe-perm
-		if [ $? -ne 0 ]; then { echo "Failed, aborting." ; exit 1; } fi
-	else
+	function installWithPlainNpm {
 		BO_log "$VERBOSE" "Installing with npm in: $(pwd)"
 		BO_run_npm install --production --unsafe-perm
 		if [ $? -ne 0 ]; then { echo "Failed, aborting." ; exit 1; } fi
+	}
+
+	if BO_has smi-for-npm; then
+		if [[ "$(pwd)" == *"/smi-for-npm/"* ]]; then
+			installWithPlainNpm
+		else
+			BO_log "$VERBOSE" "Installing with smi-for-npm in: $(pwd)"
+			smi-for-npm install --production --unsafe-perm
+			if [ $? -ne 0 ]; then { echo "Failed, aborting." ; exit 1; } fi
+		fi
+	else
+		installWithPlainNpm
 	fi
 }
 init $@
