@@ -103,8 +103,9 @@ function init {
 return 0
 
 
+
 	# Download NodeJS directly without nvm. Keeping for now.
-	function ensureNodeJS {
+	function DISABLED_ensureNodeJS {
 		BO_format "$VERBOSE" "HEADER" "Ensuring NodeJS is installed"
 		if BO_has "node"; then
 			return 0
